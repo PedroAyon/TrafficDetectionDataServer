@@ -1,12 +1,12 @@
 from flask import Flask, request, jsonify
 from dateutil import parser as date_parser  # for parsing ISO 8601 datetimes
-
-from db.repository import create_tables, add_traffic_record
+from data.repository import *
+from db.database import create_tables
 
 app = Flask(__name__)
 
 
-@app.route('/new_register', methods=['PUT'])
+@app.route('/new_register', methods=['POST'])
 def new_register():
     data = request.get_json()
     if not data:
@@ -42,10 +42,46 @@ def new_register():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/cities', methods=['GET'])
+def list_cities():
+    try:
+        cities = get_available_cities()
+        return jsonify({"cities": cities}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/cams/<string:city>', methods=['GET'])
+def cams_by_city(city):
+    try:
+        cams = get_cams_by_city(city)
+        # Serialize each TrafficCam object to dict
+        cams_list = [
+            {
+                "id": cam.id,
+                "alias": cam.alias,
+                "city": cam.city,
+                "latitude": float(cam.location_lat),
+                "longitude": float(cam.location_lng)
+            }
+            for cam in cams
+        ]
+        return jsonify({"cams": cams_list}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/traffic/<int:traffic_cam_id>', methods=['GET'])
+def traffic_state(traffic_cam_id):
+    try:
+        state = get_traffic_state(traffic_cam_id)
+        # Assuming state is an Enum, return its name
+        return jsonify({"traffic_state": state.name}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == '__main__':
-    # Create or update tables on startup
     create_tables()
 
-    # Run the Flask app
     app.run(host="localhost", port=6000, debug=True)
