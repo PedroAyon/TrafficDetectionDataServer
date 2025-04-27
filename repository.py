@@ -6,6 +6,8 @@ from contextlib import contextmanager
 from collections import defaultdict, Counter
 from math import floor
 
+from sqlalchemy.orm import joinedload
+
 # Ensure project root is in path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -81,6 +83,7 @@ def record_to_dict(record):
         "average_speed": record.average_speed
     }
 
+
 # ========== TELEGRAM ==========
 
 @handle_exceptions
@@ -119,6 +122,7 @@ def get_traffic_state(traffic_cam_id):
         if avg_speed * 0.2 < current_speed < avg_speed * 0.8:
             return TrafficStates.High
         return TrafficStates.Jam
+
 
 # ========== DASHBOARD ==========
 
@@ -181,33 +185,44 @@ def get_peak_hours(start_datetime: datetime, end_datetime: datetime, cam_id: int
 
 
 @handle_exceptions
-def get_speed_based_congestion(traffic_cam_id: int, start_datetime: datetime = None, end_datetime: datetime = None,
+def get_speed_based_congestion(traffic_cam_id: int = None, start_datetime: datetime = None,
+                               end_datetime: datetime = None,
                                speed_threshold: int = 10, city: str = None):
     with session_scope() as session:
         query = session.query(TrafficRecord)
-        query = query.filter(TrafficRecord.traffic_cam_id == traffic_cam_id)
+        if traffic_cam_id is not None:
+            query = query.filter(TrafficRecord.traffic_cam_id == traffic_cam_id)
         query = apply_date_range(query, start_datetime, end_datetime)
         if city:
             query = query.join(TrafficCam).filter(TrafficCam.city == city)
 
         total = query.count()
         if total == 0:
-            return {"congestion_percentage": 0, "status": "sin datos"}
+            return {"congestion_percentage": 0, "status": "no data"}
 
         low_count = query.filter(TrafficRecord.average_speed <= speed_threshold).count()
         perc = (low_count / total) * 100
-        return {"congestion_percentage": round(perc, 2), "status": "congestionado" if perc > 50 else "fluido"}
+        return {"congestion_percentage": round(perc, 2), "status": "congested" if perc > 50 else "fluid"}
 
 
 @handle_exceptions
-def get_traffic_records_in_range(start_datetime: datetime, end_datetime: datetime, cam_id: int = None,
+def get_traffic_records_in_range(start_datetime: datetime,
+                                 end_datetime: datetime,
+                                 cam_id: int = None,
                                  city: str = None):
     with session_scope() as session:
         query = session.query(TrafficRecord)
+        query = query.join(TrafficCam).options(joinedload(TrafficRecord.traffic_cam))
         query = apply_date_range(query, start_datetime, end_datetime)
         query = apply_filters(query, cam_id, city)
         records = query.all()
-        return [record_to_dict(r) for r in records]
+        result = []
+        for rec in records:
+            rd = record_to_dict(rec)
+            rd['alias'] = rec.traffic_cam.alias
+            result.append(rd)
+
+        return result
 
 
 @handle_exceptions
@@ -230,6 +245,7 @@ def get_traffic_jams_in_range(start_datetime: datetime, end_datetime: datetime, 
             }
             for alert in alerts
         ]
+
 
 # ========== Traffic Detection ==========
 

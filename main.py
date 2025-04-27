@@ -2,8 +2,9 @@ from flask import Flask, request, jsonify
 from dateutil import parser as date_parser  # for parsing ISO 8601 datetimes
 from repository import *
 from db.database import create_tables
-
+from flask_cors import CORS
 app = Flask(__name__)
+CORS(app)
 
 @app.route('/record', methods=['POST'])
 def new_traffic_record():
@@ -130,8 +131,13 @@ def get_congestion():
     end_datetime = request.args.get('end_datetime')
     speed_threshold = request.args.get('speed_threshold', 20, type=int)  # Umbral de velocidad (20 por defecto)
 
-    if not traffic_cam_id:
-        return jsonify({"error": "traffic_cam_id is required"}), 400
+    # if not traffic_cam_id or not traffic_cam_id.isnumeric():
+    #     return jsonify({"error": "traffic_cam_id is required"}), 400
+
+    if traffic_cam_id is not None and not traffic_cam_id.isnumeric():
+        return jsonify({"error": "traffic_cam_id is not numeric"}), 400
+    if traffic_cam_id is not None:
+        traffic_cam_id = int(traffic_cam_id)
 
     # Llamar a la función del repositorio para obtener el porcentaje de congestión
     result = get_speed_based_congestion(
@@ -191,4 +197,4 @@ def traffic_jams_in_range():
 
 if __name__ == '__main__':
     create_tables()
-    app.run(host="localhost", port=6000, debug=True)
+    app.run(host="localhost", port=5001, debug=True)
