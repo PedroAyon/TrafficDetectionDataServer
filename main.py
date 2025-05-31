@@ -3,8 +3,16 @@ from dateutil import parser as date_parser  # for parsing ISO 8601 datetimes
 from repository import *
 from db.database import create_tables
 from flask_cors import CORS
+
 app = Flask(__name__)
 CORS(app)
+
+# Automatically add ngrok header to all responses
+def add_ngrok_header(response):
+    response.headers['ngrok-skip-browser-warning'] = 'skip-browser-warning'
+    return response
+
+app.after_request(add_ngrok_header)
 
 @app.route('/record', methods=['POST'])
 def new_traffic_record():
@@ -50,11 +58,28 @@ def available_cities():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/cams', methods=['GET'])
+def all_cams():
+    try:
+        c = get_cams()
+        cams_list = [
+            {
+                "id": cam.id,
+                "alias": cam.alias,
+                "city": cam.city,
+                "latitude": float(cam.location_lat),
+                "longitude": float(cam.location_lng)
+            }
+            for cam in c
+        ]
+        return jsonify({"cams": cams_list}), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/cams/<string:city>', methods=['GET'])
 def cams_by_city(city):
     try:
-        cams = get_cams_by_city(city)
+        cams = get_cams(city)
         cams_list = [
             {
                 "id": cam.id,
@@ -69,7 +94,6 @@ def cams_by_city(city):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @app.route('/traffic_state/<int:traffic_cam_id>', methods=['GET'])
 def traffic_state(traffic_cam_id):
     try:
@@ -77,7 +101,6 @@ def traffic_state(traffic_cam_id):
         return jsonify({"traffic_state": state.name}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 @app.route('/stats', methods=['GET'])
 def get_traffic_stats():
@@ -103,7 +126,6 @@ def get_traffic_stats():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @app.route('/peak_hours', methods=['GET'])
 def peak_hours():
     start_str = request.args.get('start')
@@ -123,23 +145,18 @@ def peak_hours():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @app.route('/congestion', methods=['GET'])
 def get_congestion():
     traffic_cam_id = request.args.get('traffic_cam_id')
     start_datetime = request.args.get('start_datetime')
     end_datetime = request.args.get('end_datetime')
-    speed_threshold = request.args.get('speed_threshold', 20, type=int)  # Umbral de velocidad (20 por defecto)
-
-    # if not traffic_cam_id or not traffic_cam_id.isnumeric():
-    #     return jsonify({"error": "traffic_cam_id is required"}), 400
+    speed_threshold = request.args.get('speed_threshold', 10, type=int)  # default threshold
 
     if traffic_cam_id is not None and not traffic_cam_id.isnumeric():
         return jsonify({"error": "traffic_cam_id is not numeric"}), 400
     if traffic_cam_id is not None:
         traffic_cam_id = int(traffic_cam_id)
 
-    # Llamar a la función del repositorio para obtener el porcentaje de congestión
     result = get_speed_based_congestion(
         traffic_cam_id,
         start_datetime=start_datetime,
@@ -148,7 +165,6 @@ def get_congestion():
     )
 
     return jsonify(result)
-
 
 @app.route('/traffic_records', methods=['GET'])
 def get_traffic_records():
@@ -159,6 +175,7 @@ def get_traffic_records():
         return jsonify({"error": "Both start_datetime and end_datetime are required"}), 400
 
     try:
+        from datetime import datetime
         start_datetime = datetime.strptime(start_datetime, '%Y-%m-%d %H:%M:%S')
         end_datetime = datetime.strptime(end_datetime, '%Y-%m-%d %H:%M:%S')
     except ValueError:
@@ -170,7 +187,6 @@ def get_traffic_records():
         return jsonify({"message": "No traffic records found in the given range"}), 200
 
     return jsonify({"traffic_records": traffic_records}), 200
-
 
 @app.route('/traffic_jams', methods=['GET'])
 def traffic_jams_in_range():
@@ -193,7 +209,6 @@ def traffic_jams_in_range():
         return jsonify({"traffic_jams": traffic_jams}), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == '__main__':
     create_tables()

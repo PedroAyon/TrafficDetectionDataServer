@@ -11,7 +11,9 @@ db_engine = create_engine(DATABASE_URL, echo=True)
 # Base class for declarative entities (the ones from entities.py)
 Base = declarative_base()
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=db_engine,
+                            expire_on_commit=False)
+
 
 def create_tables():
     """

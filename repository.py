@@ -94,9 +94,12 @@ def get_available_cities():
 
 
 @handle_exceptions
-def get_cams_by_city(city):
+def get_cams(city=None):
     with session_scope() as session:
-        return session.query(TrafficCam).filter(TrafficCam.city == city).all()
+        q = session.query(TrafficCam)
+        if city:
+            q.filter(TrafficCam.city == city)
+        return q.all()
 
 
 @handle_exceptions
